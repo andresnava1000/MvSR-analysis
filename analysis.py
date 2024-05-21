@@ -55,7 +55,7 @@ def refit_and_plot(
     saveas: str
         Name of the file to save
     limits: list
-        List of [lower, upper] bounds to use for the minimization. 
+        List of [lower, upper] bounds to use for the minimization.
         Needs to be in the same order as initial_guess.
         Optional
 
@@ -120,9 +120,10 @@ def refit_and_plot(
 
     return errors
 
+
 def save_2D_example(X, y, path):
     """
-    Save 2D examples to the correct format to be used by MvSR 
+    Save 2D examples to the correct format to be used by MvSR
 
     Parameters
     ---------
@@ -130,15 +131,16 @@ def save_2D_example(X, y, path):
     y: array
     path: str
         Path of the folder to stores examples
-    """    
-    
-    header = ['Xaxis0', 'yaxis']
+    """
+
+    header = ["Xaxis0", "yaxis"]
     example = np.vstack((X, y)).T
 
-    with open(path, 'w', encoding='UTF8', newline='') as f:
+    with open(path, "w", encoding="UTF8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(header)
         writer.writerows(example)
+
 
 def refit_solution(func, path, initial_guess):
     """
@@ -173,13 +175,14 @@ def refit_solution(func, path, initial_guess):
         fit = Minuit(least_squares, **initial_guess)
         fit.migrad()
     except:
-        print('Minimization error: check inputed function')
+        print("Minimization error: check inputed function")
 
     fit = Minuit(least_squares, **initial_guess)
     fit.migrad()
     y_pred = func(X, *fit.values)
-    y_pred = np.where(y_pred<1e50, y_pred, 1e50)
-    MSE_mvsr = mean_squared_error(y, y_pred)
+    y_pred = np.where(y_pred < 1e50, y_pred, 1e50)
+    print(len(y_pred))
+    MSE_mvsr = mean_squared_error(y, y_pred)  # TODO: adjust this maybe? so that it is hingeloss?
     return MSE_mvsr
 
 
@@ -194,7 +197,7 @@ def convert_string_to_func(SR_str, n_variables):
     n_variables: int
         Dimensionality of X
     """
-    
+
     alphabet = list(string.ascii_uppercase)
     parameter_names = alphabet + [[k + i for k in alphabet for i in alphabet]]
     parameters_dict = {}
@@ -218,9 +221,7 @@ def convert_string_to_func(SR_str, n_variables):
         function_str = str(sp.N(sp.sympify(function_str), 50))
 
     # Remove scientific notation
-    function_str = re.sub(
-        "e\d+", "", re.sub("e\+\d+", "", re.sub("e-\d+", "", function_str))
-    )
+    function_str = re.sub("e\d+", "", re.sub("e\+\d+", "", re.sub("e-\d+", "", function_str)))
     # Make sure sqrt are not mistaken for parameters up to 5 sqrt intricated
     for i, code in enumerate(["one", "two", "three", "four", "five"]):
         function_str = function_str.replace(f"**{str(0.5**(i+1))}", f"**sqrt{code}")
@@ -235,14 +236,10 @@ def convert_string_to_func(SR_str, n_variables):
     for idx, one_float in enumerate(all_floats):
         if one_float in function_str:
             if one_float == "0":
-                for zzz in [
-                    i for i, letter in enumerate(function_str) if letter == "0"
-                ]:
+                for zzz in [i for i, letter in enumerate(function_str) if letter == "0"]:
                     if not function_str[zzz - 1].isnumeric():
                         n_parameters += 1
-                        function_str = function_str.replace(
-                            one_float, parameter_names[idx], 1
-                        )
+                        function_str = function_str.replace(one_float, parameter_names[idx], 1)
                         parameters_dict[parameter_names[idx]] = float(one_float)
             else:
                 n_parameters += 1
@@ -353,7 +350,7 @@ def run_mvsr(name, nseeds, settings, use_single_view=None):
             )
 
             conversion = convert_string_to_func(result[0], n_variables)
-
+            print("result:", result, "first index:", result[0], "conversion:", conversion)
             # Case where the expression was too big to be fitted realistically
             if not conversion[1]:
                 results.iloc[seed] = [conversion[0], np.nan]
@@ -362,12 +359,15 @@ def run_mvsr(name, nseeds, settings, use_single_view=None):
                 func, func_str, initial_guess = conversion
                 mse_refit = []
                 for example in examples:
+                    print(
+                        example, examples, noise, noises, seed, conversion
+                    )  # it seems to be failing for chirp data since it is just really quite bad.
                     perfect_path = f"toy_data/{name}/perfect/{example}"
                     refit = refit_solution(
                         func, perfect_path, initial_guess
-                    )
+                    )  # after multiviewSR fits a general expression, we need
                     mse_refit.append(refit)
-
+                print("refits after refitting:", mse_refit)
                 results.iloc[seed] = [func_str, mse_refit]
 
         if use_single_view is not None:
@@ -414,14 +414,13 @@ if __name__ == "__main__":
         "--maxL", nargs="*", type=int, default=[5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25], help="maxL list"
     )
     arg_parser.add_argument("--opset", default="common", type=str, help="common or sin")
-    arg_parser.add_argument(
-        "--function", required=True, type=str, help="Function to extract"
-    )
+    arg_parser.add_argument("--function", required=True, type=str, help="Function to extract")
     arg_parser.add_argument("--nseeds", default=100, type=int, help="Number of seeds")
     args = arg_parser.parse_args()
 
+    # dict_keys(['Add', 'Mul', 'Sub', 'Div', 'Fmin', 'Fmax', 'Aq', 'Pow', 'Abs', 'Acos', 'Asin', 'Atan', 'Cbrt', 'Ceil', 'Cos', 'Cosh', 'Exp', 'Floor', 'Log', 'Logabs', 'Log1p', 'Sin', 'Sinh', 'Sqrt', 'Sqrtabs', 'Tan', 'Tanh', 'Square', 'Dyn', 'Constant', 'Variable'])
     common_operation_set = (
-        Operon.NodeType.Square | Operon.NodeType.Exp | Operon.NodeType.Sqrt
+        Operon.NodeType.Square | Operon.NodeType.Exp | Operon.NodeType.Sqrt | Operon.NodeType.Log | Operon.NodeType.Cbrt
     )
 
     if args.opset == "common":

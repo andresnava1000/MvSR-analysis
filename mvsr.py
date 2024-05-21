@@ -1,6 +1,6 @@
 import numpy as np
 from pyoperon.sklearn import SymbolicRegressor
-from sklearn.metrics import r2_score, mean_squared_error
+from sklearn.metrics import r2_score, mean_squared_error, hinge_loss
 import pyoperon as Operon
 import random, time, sys, os, json
 from scipy import stats
@@ -9,6 +9,31 @@ import sympy as sp
 import warnings
 
 warnings.filterwarnings("ignore")
+
+
+class HingeLossEvaluator(Operon.ErrorMetric):
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, y_true, y_pred):
+        # Apply the hinge loss function
+        return hinge_loss(y_true, y_pred)
+
+
+def hinge_loss_evaluator(rng, individual):
+    # Get the dataset and other necessary components from the problem
+    problem = individual.Problem
+    ds = problem.Dataset
+    X = ds.Values[:, :-1]  # Assuming last column is the target
+    y_true = ds.Values[:, -1]
+
+    # Interpret the individual's genotype to get the predicted values
+    interpreter = Operon.Interpreter()
+    y_pred = interpreter.Evaluate(individual.Genotype, X)
+
+    # Calculate the custom hinge loss
+    loss = hinge_loss(y_true, y_pred)
+    return [loss]
 
 
 def MultiViewSR(
@@ -33,12 +58,7 @@ def MultiViewSR(
     n_sets = len(all_examples)
     problems = []
     selectors = []
-    smallest_data = np.array(
-        [
-            len(np.loadtxt(f"{path}/{i}", delimiter=",", skiprows=1))
-            for i in all_examples
-        ]
-    ).min()
+    smallest_data = np.array([len(np.loadtxt(f"{path}/{i}", delimiter=",", skiprows=1)) for i in all_examples]).min()
 
     for i in all_examples:
         Z = np.loadtxt(f"{path}/{i}", delimiter=",", skiprows=1)
@@ -101,9 +121,7 @@ def MultiViewSR(
     mutation.Add(mut_replace, 1)
 
     # define crossover
-    crossover_internal_probability = (
-        0.9  # probability to pick an internal node as a cut point
-    )
+    crossover_internal_probability = 0.9  # probability to pick an internal node as a cut point
     crossover = Operon.SubtreeCrossover(crossover_internal_probability, maxD, maxL)
 
     # define fitness evaluation
@@ -112,12 +130,35 @@ def MultiViewSR(
     interpreters = []
     metrics = []
     optimizers = []
+    print("OPERON DIR::::", dir(Operon))
+    import inspect
+
+    methods = [
+        "MAE",
+        "MSE",
+        "RMSE",
+        "R2",
+        "NMSE",
+        "BayesianInformationCriterionEvaluator",
+        "AkaikeInformationCriterionEvaluator",
+        "MinimumDescriptionLengthEvaluator",
+    ]
+    # print(type(Operon.MAE))
+    # # help(Operon.MSE)
+    # print(dir(Operon.pyoperon))
+
+    # # help(Operon.pyoperon.UserDefinedEvaluator)
+    # print("SKLERN THINGY", dir(Operon.MSE()))
     for i in range(n_sets):
         interpreter = Operon.DispatchTable()  # tree interpreter
         interpreters.append(interpreter)
-        error_metric = Operon.MSE()  # use the coefficient of determination as fitness
+        error_metric = Operon.MSE()  # Operon.UserDefinedEvaluator(
+        # problems[i], hinge_loss_evaluator
+        # )  # HingeLossEvaluator()  # Operon.MSE()  # use the coefficient of determination as fitness
         metrics.append(error_metric)
         evaluator_i = Operon.Evaluator(problems[i], interpreter, metrics[-1], True)
+        # evaluator_i = Operon.UserDefinedEvaluator(problems[i], hinge_loss_evaluator)
+
         optimizers.append(
             Operon.Optimizer(
                 interpreter,
@@ -148,9 +189,7 @@ def MultiViewSR(
     evaluator.Budget = 1000 * 1000  # computational budget
 
     # define how new offspring are created
-    generator = Operon.BasicOffspringGenerator(
-        aggregateEvaluator, crossover, mutation, selector, selector
-    )
+    generator = Operon.BasicOffspringGenerator(aggregateEvaluator, crossover, mutation, selector, selector)
     # initialize an algorithm configuration
     config = Operon.GeneticAlgorithmConfig(
         generations=generations,
@@ -174,11 +213,7 @@ def MultiViewSR(
     # report some progress
     gen = 0
     max_ticks = 50
-    interval = (
-        1
-        if config.Generations < max_ticks
-        else int(np.round(config.Generations / max_ticks, 0))
-    )
+    interval = 1 if config.Generations < max_ticks else int(np.round(config.Generations / max_ticks, 0))
     t0 = time.time()
 
     # initialize a rng
