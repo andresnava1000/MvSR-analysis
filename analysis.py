@@ -180,8 +180,11 @@ def refit_solution(func, path, initial_guess):
     fit = Minuit(least_squares, **initial_guess)
     fit.migrad()
     y_pred = func(X, *fit.values)
+    # print(y_pred)
+    # print("just before bug:", len(y), len(y_pred), " after filter: ", len(np.where(y_pred < 1e50, y_pred, 1e50)))
     y_pred = np.where(y_pred < 1e50, y_pred, 1e50)
-    print(len(y_pred))
+    y_pred = np.clip(np.real(y_pred), a_min=-1e6, a_max=1e6)
+    # there is abug sometime where this crashes...
     MSE_mvsr = mean_squared_error(y, y_pred)  # TODO: adjust this maybe? so that it is hingeloss?
     return MSE_mvsr
 
@@ -350,7 +353,7 @@ def run_mvsr(name, nseeds, settings, use_single_view=None):
             )
 
             conversion = convert_string_to_func(result[0], n_variables)
-            print("result:", result, "first index:", result[0], "conversion:", conversion)
+            # print("result:", result, "first index:", result[0], "conversion:", conversion)
             # Case where the expression was too big to be fitted realistically
             if not conversion[1]:
                 results.iloc[seed] = [conversion[0], np.nan]
@@ -359,15 +362,15 @@ def run_mvsr(name, nseeds, settings, use_single_view=None):
                 func, func_str, initial_guess = conversion
                 mse_refit = []
                 for example in examples:
-                    print(
-                        example, examples, noise, noises, seed, conversion
-                    )  # it seems to be failing for chirp data since it is just really quite bad.
+                    # print(
+                    #     example, examples, noise, noises, seed, conversion
+                    # )  # it seems to be failing for chirp data since it is just really quite bad.
                     perfect_path = f"toy_data/{name}/perfect/{example}"
                     refit = refit_solution(
                         func, perfect_path, initial_guess
                     )  # after multiviewSR fits a general expression, we need
                     mse_refit.append(refit)
-                print("refits after refitting:", mse_refit)
+                # print("refits after refitting:", mse_refit)
                 results.iloc[seed] = [func_str, mse_refit]
 
         if use_single_view is not None:
@@ -404,7 +407,7 @@ def run_analysis(name, nseeds, settings):
         setting = settings.copy()
         setting["maxL"] = maxL
         run_mvsr(name, nseeds, setting)
-        run_single_view(name, nseeds, setting)
+        # run_single_view(name, nseeds, setting) # what is this single view stuff.? do we need that ? I don't think so?
 
 
 if __name__ == "__main__":

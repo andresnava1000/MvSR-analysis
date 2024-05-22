@@ -130,19 +130,19 @@ def MultiViewSR(
     interpreters = []
     metrics = []
     optimizers = []
-    print("OPERON DIR::::", dir(Operon))
-    import inspect
+    # print("OPERON DIR::::", dir(Operon))
+    # import inspect
 
-    methods = [
-        "MAE",
-        "MSE",
-        "RMSE",
-        "R2",
-        "NMSE",
-        "BayesianInformationCriterionEvaluator",
-        "AkaikeInformationCriterionEvaluator",
-        "MinimumDescriptionLengthEvaluator",
-    ]
+    # methods = [
+    #     "MAE",
+    #     "MSE",
+    #     "RMSE",
+    #     "R2",
+    #     "NMSE",
+    #     "BayesianInformationCriterionEvaluator",
+    #     "AkaikeInformationCriterionEvaluator",
+    #     "MinimumDescriptionLengthEvaluator",
+    # ]
     # print(type(Operon.MAE))
     # # help(Operon.MSE)
     # print(dir(Operon.pyoperon))
@@ -152,9 +152,7 @@ def MultiViewSR(
     for i in range(n_sets):
         interpreter = Operon.DispatchTable()  # tree interpreter
         interpreters.append(interpreter)
-        error_metric = Operon.MSE()  # Operon.UserDefinedEvaluator(
-        # problems[i], hinge_loss_evaluator
-        # )  # HingeLossEvaluator()  # Operon.MSE()  # use the coefficient of determination as fitness
+        error_metric = Operon.MSE()  # use the coefficient of determination as fitness
         metrics.append(error_metric)
         evaluator_i = Operon.Evaluator(problems[i], interpreter, metrics[-1], True)
         # evaluator_i = Operon.UserDefinedEvaluator(problems[i], hinge_loss_evaluator)
