@@ -183,9 +183,11 @@ def refit_solution(func, path, initial_guess):
     # print(y_pred)
     # print("just before bug:", len(y), len(y_pred), " after filter: ", len(np.where(y_pred < 1e50, y_pred, 1e50)))
     y_pred = np.where(y_pred < 1e50, y_pred, 1e50)
-    y_pred = np.clip(np.real(y_pred), a_min=-1e6, a_max=1e6)
+    y_pred = np.clip(np.real(y_pred), a_min=-1e6, a_max=1e6)  # probably not necessary?
     # there is abug sometime where this crashes...
-    MSE_mvsr = mean_squared_error(y, y_pred)  # TODO: adjust this maybe? so that it is hingeloss?
+    MSE_mvsr = mean_squared_error(
+        y, y_pred
+    )  # TODO: adjust this maybe? so that it is hingeloss? ... this is very hard to do.
     return MSE_mvsr
 
 
@@ -432,7 +434,7 @@ if __name__ == "__main__":
         operation_set = common_operation_set | Operon.NodeType.Sin
 
     common_setting = {
-        "generations": 1000,
+        "generations": 10000,  # modify so that it runs for longer. 1000 iterations took 30 minutes
         "maxL": args.maxL,
         "maxD": 5,
         "OperationSet": operation_set,

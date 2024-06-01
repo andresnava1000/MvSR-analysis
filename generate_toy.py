@@ -159,11 +159,12 @@ def generate_data(func, name, Xs, nXs, params, noises, oversample=False):
 if __name__ == "__main__":
 
     noises = []  # can this be empty?
-    data_directory = "/home/anava/projects/symbolic_regression_examples/data/paths/2D/90"
+    data_directory = "/home/anava/projects/symbolic_regression_examples/data/paths/2D/lowmass"
     file_list = [f for f in os.listdir(data_directory) if f.endswith(".txt")]
     n_files = len(file_list)
     file_combinations = list(itertools.combinations(file_list, 2))
     n_combinations = len(file_combinations)
+    print(file_list)
 
     # c_values = [
     #     math.sqrt(random.uniform(1, 100)) for _ in range(n_combinations)
@@ -190,7 +191,7 @@ if __name__ == "__main__":
 
     generate_data(
         identity_function,
-        "degeneracy_paths_2D_90",
+        "degeneracy_paths_2D_lowmass",
         Xs,
         2,  # You now have 2 input dimensions
         c_values,  # Pass parameters
