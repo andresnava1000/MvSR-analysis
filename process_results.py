@@ -7,13 +7,11 @@ import re
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 
-def main():
-    dim = "2D"
-    mass = "lowmass"
-
-    # Load CSV files
+def analyze_degeneracy_path_fit_mvsr(dim="2D", mass="lowmass"):
+    # Assuming we did the following fits: max complexity 5, 9, 15, 25
     file1 = pd.read_csv(
         f"/home/anava/projects/MvSR-analysis/toy_results/degeneracy_paths_{dim}_{mass}/perfect/max5/MvSR_results.csv"
     )
@@ -27,28 +25,22 @@ def main():
         f"/home/anava/projects/MvSR-analysis/toy_results/degeneracy_paths_{dim}_{mass}/perfect/max25/MvSR_results.csv"
     )
 
-    # Combine into a single DataFrame for ease of processing
     df = pd.concat([file1, file2, file3, file4], ignore_index=True)
     df = df.drop_duplicates(subset=["expression"])
 
-    # Function to parse the losses
     def parse_losses(losses):
         return list(map(float, losses.strip("[]").split(",")))
 
-    # Apply parsing to the losses column
     df["losses"] = df["losses"].apply(parse_losses)
 
-    # Calculate summary statistics
     summary_stats = df["losses"].apply(
         lambda x: pd.Series({"mean": np.mean(x), "median": np.median(x), "std_dev": np.std(x)})
     )
 
-    # Add the summary statistics to the original DataFrame
     df = pd.concat([df, summary_stats], axis=1)
 
     df["DoF"] = df["expression"].str.count(r"[A-Z]")
 
-    # get data list
     data_list = []
     for file_num in [0, 1, 2, 3, 4, 5, 6, 7, 8]:
         data_file = f"/home/anava/projects/symbolic_regression_examples/data/paths/{dim}/{mass}/{mass}_{file_num}.txt"
@@ -262,6 +254,157 @@ def main():
     plot_filename = os.path.join(plots_path, file_name)
     plt.savefig(plot_filename)
 
+    import numpy as np
+
+
+def analyze_1d_fit_mvsr(dataset_name="chirp_mass_1d"):
+    # file1 = pd.read_csv(f"/home/anava/projects/MvSR-analysis/toy_results/{dataset_name}/perfect/max5/MvSR_results.csv")
+    file2 = pd.read_csv(f"/home/anava/projects/MvSR-analysis/toy_results/{dataset_name}/perfect/max9/MvSR_results.csv")
+    file3 = pd.read_csv(f"/home/anava/projects/MvSR-analysis/toy_results/{dataset_name}/perfect/max15/MvSR_results.csv")
+    file4 = pd.read_csv(f"/home/anava/projects/MvSR-analysis/toy_results/{dataset_name}/perfect/max25/MvSR_results.csv")
+
+    df = pd.concat([file2, file3, file4], ignore_index=True)
+    df = df.drop_duplicates(subset=["expression"])
+
+    def parse_losses(losses):
+        return list(map(float, losses.strip("[]").split(",")))
+
+    df["losses"] = df["losses"].apply(parse_losses)
+
+    summary_stats = df["losses"].apply(
+        lambda x: pd.Series({"mean": np.mean(x), "median": np.median(x), "std_dev": np.std(x)})
+    )
+
+    df = pd.concat([df, summary_stats], axis=1)
+
+    df["DoF"] = df["expression"].str.count(r"[A-Z]")
+
+    import os
+
+    data_list = []
+    directory = f"/home/anava/projects/MvSR-analysis/toy_data/{dataset_name}/perfect"
+    for file_name in os.listdir(directory):
+        if file_name.endswith(".csv"):
+            data_file = os.path.join(directory, file_name)
+            data = np.genfromtxt(data_file, delimiter=",", skip_header=1)
+            # X1.append(data[:, 0])
+            # Y.append(data[:, 1])
+            data_list.append(data)
+
+    # X1 = np.concatenate(
+    #     X1
+    # )  # instead of concatenating, we already know which is best based on the losses.
+    # Y = np.concatenate(Y)
+
+    # variable = sp.symbols("X1")
+
+    function_mapping = {
+        "exp": sp.exp,
+        "log": sp.log,
+        "sqrt": sp.sqrt,
+        "cbrt": lambda x: x ** (sp.S(1) / 3),  # Cube root function
+    }
+
+    xlabel = "X"
+    ylabel = "Y"
+
+    x = np.concatenate([data[:, 0] for data in data_list])
+    y = np.concatenate([data[:, 1] for data in data_list])
+    x_min, x_max = np.min(x), np.max(x)
+    y_min, y_max = np.min(y), np.max(y)
+    plot_bounds = [[1, 5], [-15, 15]]
+    plot_bounds = [[x_min, x_max], [y_min, y_max]]
+    grid_size = 1000
+    x_min, x_max = plot_bounds[0]
+    y_min, y_max = plot_bounds[1]
+
+    xx, yy = np.meshgrid(np.linspace(x_min, x_max, grid_size), np.linspace(y_min, y_max, grid_size))
+    grid = np.c_[xx.ravel(), yy.ravel()]
+
+    # for the best one, we should plot it.
+    mean_rmse_list = list(df["losses"])
+    expressions_list = list(df["expression"])
+    min_index = mean_rmse_list.index(min(mean_rmse_list))
+    print("optimal rmse, index, expression and params: ", min(mean_rmse_list), min_index, expressions_list[min_index])
+
+    # # print(len(df["expression"]), list(df["expression"]))
+    expr_string = expressions_list[min_index]  # list(df["expression"])[min_index]
+
+    constants = sorted(set(re.findall(r"\b[A-Z]\b", expr_string)))
+
+    constants = sp.symbols(" ".join(constants))
+
+    expr = sp.sympify(expr_string, locals=function_mapping)
+    func = sp.lambdify(
+        (sp.symbols("X1"), *constants), expr, "numpy"
+    )  # this might break and should just give it variable sicne its not a list.
+
+    initial_guess = [0.1] * len(constants)
+
+    def objective(X, *params):  # modify this objective... our functions are 1d
+        return func(X, *params)
+
+        zz = objective((xx.ravel(), yy.ravel()), *params).reshape(xx.shape)
+
+    rmse_list = []
+
+    plt.clf()
+    plt.close("all")
+    plt.figure(figsize=(10, 8))
+    for i, data in enumerate(data_list):
+
+        try:
+            params, params_covariance = curve_fit(objective, data[:, 0], data[:, 1], p0=initial_guess)
+            print(f"Fit successful for expression {i}: {expr_string}")
+        except RuntimeError as e:
+            print(f"Fit failed for expression {i}: {expr_string}")
+            continue
+        except Exception as e:
+            print(f"An unexpected error occurred for expression {i}: {expr_string}, error: {str(e)}")
+            continue
+
+        predictions = objective(data[:, 0], *params)
+
+        errors = []
+        for point, prediction in zip(data, predictions):
+            y_distance_error = np.abs(prediction - point[1])
+            errors.append(y_distance_error)
+            #
+            plt.scatter(point[0], point[1], c="blue", s=5)
+            plt.scatter(point[0], prediction, c="red", s=5)
+        x_values = data[:, 0]
+        y_values = predictions
+        plt.plot(x_values, y_values, c="red", linewidth=1)
+        rmse = np.sqrt(mean_squared_error(np.zeros_like(errors), errors))
+        rmse_list.append(rmse)
+        formatted_errors = map("{:.4f}".format, errors)
+        string = ", ".join(formatted_errors)
+        print(f"RMSE between points and contour in y-direction: {rmse:.4f} errors: {string}")
+        plt.scatter(data[:, 0], data[:, 1], c="blue", label=f"path {i}, RMSE y-dir: {rmse:.4f}")
+
+    plt.title(f"Multi Function Fit MvSR {dataset_name} (avg RMSE y-dir: {np.mean(rmse_list):.4f})")
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    # formatted_params = map("{:.4f}".format, params)
+    # string = ", ".join(formatted_params)
+    plt.legend(title=f"Model: {expr_string}", loc="best")
+
+    # plt.show()
+
+    import os
+
+    plots_path = "/home/anava/projects/symbolic_regression_examples/data/plots/Jun02/MultipleFit"
+    file_name = f"MvSR_{dataset_name}.png"
+    os.makedirs(plots_path, exist_ok=True)
+    plot_filename = os.path.join(plots_path, file_name)
+    plt.savefig(plot_filename)
+
 
 if __name__ == "__main__":
-    main()
+    # analyze_degeneracy_path_fit_mvsr()
+    # func_names = ["chirp_mass_1d", "hyperbolic_1d", "circle_1d", "inverse_1d", "exponential_plus_poly_1d"]
+    analyze_1d_fit_mvsr(dataset_name="chirp_mass_1d")
+    analyze_1d_fit_mvsr(dataset_name="hyperbolic_1d")
+    analyze_1d_fit_mvsr(dataset_name="circle_1d")
+    analyze_1d_fit_mvsr(dataset_name="inverse_1d")
+    analyze_1d_fit_mvsr(dataset_name="exponential_plus_poly_1d")

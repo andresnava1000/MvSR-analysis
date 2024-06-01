@@ -48,6 +48,31 @@ def func_chirp_mass(x, c):
         return np.nan
 
 
+def func_hyperbolic(x, c):
+    # only defined if c > -x**2
+    # if c < -x**2:
+    #     return np.nan
+    return np.sqrt(c + x**2)
+
+
+def func_circle(x, c):
+    # only defined while x is in the range of -c to c
+    # if x**2 > c**2:
+    #     return np.nan
+    return np.sqrt(c - x**2)
+
+
+def func_inverse(x, c):
+    return x / c
+
+
+def func_exponential_plus_poly(x, c):
+    # e^{x}+x^{2}*y=c
+    # if x == 0:
+    #     return np.nan
+    return (c - np.exp(x)) / x**2
+
+
 def func_poly3(X, A, B, C, D):
     return A + B * X + C * X**2 + D * X**3
 
@@ -105,9 +130,18 @@ def generate_data(func, name, Xs, nXs, params, noises, oversample=False):
     for idx, param in enumerate(params):
         x = Xs[idx]
         y = func(x.T, *param)
+
         # y = (
         #     10 * y / (max([abs(k) for k in y])) if np.abs(max([abs(k) for k in y])) != 0 else y
         # )  # normalization that probably we can remove. (probably stability reasons)
+
+        # handle points that are not defined (np.nan in y) if length is < 2 of defined points, we discard this contour
+        valid_indices = ~np.isnan(y)
+        x = x[valid_indices]
+        y = y[valid_indices]
+        if len(x) < 2:
+            continue
+
         if type(oversample) == list:
             x = np.concatenate([list(x) for _k in range(oversample[idx])])
             y = np.concatenate([list(y) for _k in range(oversample[idx])])
@@ -158,45 +192,87 @@ def generate_data(func, name, Xs, nXs, params, noises, oversample=False):
 
 if __name__ == "__main__":
 
-    noises = []  # can this be empty?
-    data_directory = "/home/anava/projects/symbolic_regression_examples/data/paths/2D/lowmass"
-    file_list = [f for f in os.listdir(data_directory) if f.endswith(".txt")]
-    n_files = len(file_list)
-    file_combinations = list(itertools.combinations(file_list, 2))
-    n_combinations = len(file_combinations)
-    print(file_list)
+    # We will generate families of contours from different surfaces. These contours are invertible (locally) and parametrized by c
+    # ____________________________________________________________________
+    # https://www.desmos.com/calculator/q67flx8tf9
+    Xs_lim = [1, 5]  # domain
+    original_domain_size = Xs_lim[1] - Xs_lim[0]
+    min_reduced_domain_size = original_domain_size / 2
+    num_points_mean = 80
+    num_points_stddev = 5
+    c_list = [[-7], [-1], [0], [2], [8], [9], [11], [15]]
+    num_samples = len(c_list)
+    seed = 42
+    func_names = ["chirp_mass_1d", "hyperbolic_1d", "circle_1d", "inverse_1d", "exponential_plus_poly_1d"]
 
-    # c_values = [
-    #     math.sqrt(random.uniform(1, 100)) for _ in range(n_combinations)
-    # ]  # set contour label as random irrational number between 0 and 10
-    # print(c_values)
-    Xs = []
-    c_values = []
-    # for file in file_list:
-    #     filepath = os.path.join(data_directory, file)
-    #     Xs.append(load_data_from_file(filepath))
+    for fidx, func in enumerate(
+        [func_chirp_mass, func_hyperbolic, func_circle, func_inverse, func_exponential_plus_poly]
+    ):
+        Xs = []
+        for i in range(num_samples):
 
-    for file_pair in file_combinations:
-        data_combined = []
-        c_value = []
-        for idx, file in enumerate(file_pair):
-            filepath = os.path.join(data_directory, file)
-            data = load_data_from_file(filepath)
-            data_combined.append(data)
-            label = label_function(idx) * np.ones(data.shape[1])
-            c_value.extend([label_function(idx)] * data.shape[1])
-        combined_data = np.hstack(data_combined)  # Combine the two data arrays horizontally
-        Xs.append(combined_data)
-        c_values.append(c_value)
+            num_points = int(np.random.normal(num_points_mean, num_points_stddev))
+            num_points = max(num_points, 2)
 
-    generate_data(
-        identity_function,
-        "degeneracy_paths_2D_lowmass",
-        Xs,
-        2,  # You now have 2 input dimensions
-        c_values,  # Pass parameters
-        noises,
-    )
+            reduced_domain_size = np.random.uniform(min_reduced_domain_size, original_domain_size)
+            reduced_domain_start = np.random.uniform(Xs_lim[0], Xs_lim[1] - reduced_domain_size)
+            reduced_domain_end = reduced_domain_start + reduced_domain_size
+
+            x_values = np.sort(np.random.uniform(reduced_domain_start, reduced_domain_end, num_points))
+
+            Xs.append(x_values)
+
+        generate_data(
+            func=func,
+            name=func_names[fidx],
+            Xs=Xs,
+            nXs=1,
+            params=c_list,
+            noises=[],
+        )
+
+    # ____________________________________________________________________
+    generate_degen_data = False
+    if generate_degen_data:
+        noises = []  # can this be empty?
+        data_directory = "/home/anava/projects/symbolic_regression_examples/data/paths/2D/lowmass"
+        file_list = [f for f in os.listdir(data_directory) if f.endswith(".txt")]
+        n_files = len(file_list)
+        file_combinations = list(itertools.combinations(file_list, 2))
+        n_combinations = len(file_combinations)
+        print(file_list)
+
+        # c_values = [
+        #     math.sqrt(random.uniform(1, 100)) for _ in range(n_combinations)
+        # ]  # set contour label as random irrational number between 0 and 10
+        # print(c_values)
+        Xs = []
+        c_values = []
+        # for file in file_list:
+        #     filepath = os.path.join(data_directory, file)
+        #     Xs.append(load_data_from_file(filepath))
+
+        for file_pair in file_combinations:
+            data_combined = []
+            c_value = []
+            for idx, file in enumerate(file_pair):
+                filepath = os.path.join(data_directory, file)
+                data = load_data_from_file(filepath)
+                data_combined.append(data)
+                label = label_function(idx) * np.ones(data.shape[1])
+                c_value.extend([label_function(idx)] * data.shape[1])
+            combined_data = np.hstack(data_combined)  # Combine the two data arrays horizontally
+            Xs.append(combined_data)
+            c_values.append(c_value)
+
+        generate_data(
+            identity_function,
+            "degeneracy_paths_2D_lowmass",
+            Xs,
+            2,  # You now have 2 input dimensions nXs
+            c_values,  # Pass parameters
+            noises,
+        )
 
     generate_chirp_data = False
     if generate_chirp_data:
