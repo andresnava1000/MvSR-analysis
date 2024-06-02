@@ -329,6 +329,7 @@ def analyze_1d_fit_mvsr(dataset_name="chirp_mass_1d"):
 
     # # print(len(df["expression"]), list(df["expression"]))
     expr_string = expressions_list[min_index]  # list(df["expression"])[min_index]
+    expr_string = expr_string.replace("I", "Z")
 
     constants = sorted(set(re.findall(r"\b[A-Z]\b", expr_string)))
 
@@ -338,8 +339,6 @@ def analyze_1d_fit_mvsr(dataset_name="chirp_mass_1d"):
     func = sp.lambdify(
         (sp.symbols("X1"), *constants), expr, "numpy"
     )  # this might break and should just give it variable sicne its not a list.
-
-    initial_guess = [0.1] * len(constants)
 
     def objective(X, *params):  # modify this objective... our functions are 1d
         return func(X, *params)
@@ -353,17 +352,46 @@ def analyze_1d_fit_mvsr(dataset_name="chirp_mass_1d"):
     plt.figure(figsize=(10, 8))
     for i, data in enumerate(data_list):
 
-        try:
-            params, params_covariance = curve_fit(objective, data[:, 0], data[:, 1], p0=initial_guess)
-            print(f"Fit successful for expression {i}: {expr_string}")
-        except RuntimeError as e:
-            print(f"Fit failed for expression {i}: {expr_string}")
-            continue
-        except Exception as e:
-            print(f"An unexpected error occurred for expression {i}: {expr_string}, error: {str(e)}")
-            continue
+        max_retries = 10_0
+        fit_successful = False
+        for attempt in range(max_retries):
+            try:
+                # Generate a random initial guess for each attempt
+                initial_guess = np.random.uniform(-1, 1, len(constants))  # Example range, adjust as needed
+                # set nth element to positive:
+                initial_guess[6] = np.abs(initial_guess[2])
+
+                params, params_covariance = curve_fit(
+                    objective, data[:, 0], data[:, 1], p0=initial_guess, maxfev=1_000_000
+                )
+                print(f"Fit successful for expression {i}: {expr_string} on attempt {attempt + 1}")
+                fit_successful = True
+                break
+            except RuntimeError as e:
+                print(
+                    f"Fit attempt {attempt + 1} failed for expression {i}: {expr_string} with initial guess {initial_guess} {e}"
+                )
+            except Exception as e:
+                print(
+                    f"An unexpected error occurred for expression {i}: {expr_string} on attempt {attempt + 1}, error: {str(e)}"
+                )
+
+        if not fit_successful:
+            print(f"Fit failed for expression {i}: {expr_string} after {max_retries} attempts")
+
+        # try:
+        #     initial_guess = [0.1] * len(constants)
+        #     params, params_covariance = curve_fit(objective, data[:, 0], data[:, 1], p0=initial_guess)
+        #     print(f"Fit successful for expression {i}: {expr_string}")
+        # except RuntimeError as e:
+        #     print(f"Fit failed for expression {i}: {expr_string}")
+        #     continue
+        # except Exception as e:
+        #     print(f"An unexpected error occurred for expression {i}: {expr_string}, error: {str(e)}")
+        #     continue
 
         predictions = objective(data[:, 0], *params)
+        predictions = np.nan_to_num(predictions, nan=1000)
 
         errors = []
         for point, prediction in zip(data, predictions):
@@ -403,8 +431,9 @@ def analyze_1d_fit_mvsr(dataset_name="chirp_mass_1d"):
 if __name__ == "__main__":
     # analyze_degeneracy_path_fit_mvsr()
     # func_names = ["chirp_mass_1d", "hyperbolic_1d", "circle_1d", "inverse_1d", "exponential_plus_poly_1d"]
-    analyze_1d_fit_mvsr(dataset_name="chirp_mass_1d")
-    analyze_1d_fit_mvsr(dataset_name="hyperbolic_1d")
-    analyze_1d_fit_mvsr(dataset_name="circle_1d")
-    analyze_1d_fit_mvsr(dataset_name="inverse_1d")
-    analyze_1d_fit_mvsr(dataset_name="exponential_plus_poly_1d")
+    # analyze_1d_fit_mvsr(dataset_name="chirp_mass_1d")
+    # analyze_1d_fit_mvsr(dataset_name="hyperbolic_1d")
+    # analyze_1d_fit_mvsr(dataset_name="circle_1d")
+    # analyze_1d_fit_mvsr(dataset_name="inverse_1d")
+    # analyze_1d_fit_mvsr(dataset_name="exponential_plus_poly_1d")
+    print("done")
